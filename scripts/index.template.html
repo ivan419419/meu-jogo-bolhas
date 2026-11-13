@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#101831">
+  <title>Bolhas em Órbita — protótipo jogável</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0d1429;
+      color: #f4f6ff;
+      font-synthesis: none;
+      text-rendering: optimizeLegibility;
+      -webkit-font-smoothing: antialiased;
+      --muted: #a8b4d3;
+      --panel: rgba(28, 40, 73, .86);
+      --line: rgba(176, 194, 245, .12);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100svh;
+      padding: max(18px, env(safe-area-inset-top)) 16px max(22px, env(safe-area-inset-bottom));
+      background:
+        radial-gradient(ellipse at 15% 5%, rgba(65, 108, 207, .22), transparent 35rem),
+        radial-gradient(ellipse at 95% 52%, rgba(122, 75, 189, .14), transparent 34rem),
+        #0d1429;
+    }
+    .app { width: min(100%, 540px); margin: 0 auto; }
+    .topline { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 15px; }
+    .brand { display: flex; align-items: center; gap: 9px; font-size: 12px; font-weight: 800; letter-spacing: .11em; text-transform: uppercase; color: #d9e3ff; }
+    .brand-mark { width: 22px; height: 22px; border-radius: 50%; background: radial-gradient(circle at 32% 25%, #d8f6ff, #54b8ff 45%, #3451a1); box-shadow: 0 0 18px #58aaff55; }
+    .tag { border: 1px solid rgba(143, 171, 245, .22); border-radius: 999px; padding: 6px 10px; color: #b8c8f4; font-size: 10px; font-weight: 800; letter-spacing: .09em; white-space: nowrap; }
+    header { margin-bottom: 17px; }
+    h1 { margin: 0; font-size: clamp(25px, 7vw, 34px); letter-spacing: -.045em; line-height: 1.08; }
+    .intro { margin: 8px 0 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
+    .hud { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+    .stat { min-height: 58px; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 14px; border: 1px solid var(--line); border-radius: 16px; background: var(--panel); box-shadow: 0 10px 28px rgba(0,0,0,.12); }
+    .stat-label { display: block; color: var(--muted); font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+    .stat-value { display: block; margin-top: 2px; font-size: 19px; font-weight: 850; font-variant-numeric: tabular-nums; }
+    .stat-icon { font-size: 19px; opacity: .75; }
+    .game-panel { overflow: hidden; border: 1px solid rgba(176, 194, 245, .16); border-radius: 23px; background: #141e3d; box-shadow: 0 22px 55px rgba(0,0,0,.27); }
+    .status-line { min-height: 38px; display: flex; justify-content: center; align-items: center; gap: 8px; padding: 8px 12px; color: #d5def8; text-align: center; font-size: 12px; font-weight: 650; }
+    .status-dot { width: 7px; height: 7px; flex: 0 0 7px; border-radius: 50%; background: #67e4bd; box-shadow: 0 0 10px #67e4bd88; }
+    .status-line.is-result .status-dot { background: #ff9ca8; box-shadow: 0 0 10px #ff9ca888; }
+    .canvas-wrap { position: relative; width: 100%; height: clamp(420px, 61svh, 580px); overflow: hidden; background: #151e3b; touch-action: manipulation; }
+    canvas { display: block; width: 100%; height: 100%; cursor: crosshair; touch-action: manipulation; }
+    .ammo-bar { display: flex; align-items: center; gap: 10px; padding: 12px; border-top: 1px solid var(--line); background: rgba(15, 23, 47, .76); }
+    .ammo { min-width: 0; flex: 1; display: flex; align-items: center; gap: 8px; }
+    .swatch { display: inline-block; width: 25px; height: 25px; flex: 0 0 25px; border: 2px solid rgba(255,255,255,.48); border-radius: 50%; background: radial-gradient(circle at 32% 25%, #fff, var(--bubble-color) 47%, #40527d); box-shadow: 0 2px 10px color-mix(in srgb, var(--bubble-color), transparent 55%); }
+    .ammo-copy { min-width: 0; }
+    .ammo-label { display: block; color: var(--muted); font-size: 9px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+    .ammo-name { display: block; overflow: hidden; margin-top: 2px; font-size: 12px; font-weight: 750; text-overflow: ellipsis; text-transform: capitalize; }
+    button { min-height: 43px; border: 1px solid rgba(176,194,245,.18); border-radius: 13px; color: #edf2ff; background: #283862; font: inherit; font-size: 12px; font-weight: 800; cursor: pointer; transition: transform .15s ease, background .15s ease, border-color .15s ease; }
+    button:hover:not(:disabled) { transform: translateY(-1px); background: #354a7e; border-color: rgba(190,208,255,.4); }
+    button:active:not(:disabled) { transform: translateY(0) scale(.98); }
+    button:focus-visible { outline: 3px solid #84c9ff; outline-offset: 2px; }
+    button:disabled { opacity: .45; cursor: not-allowed; }
+    .swap { padding: 0 12px; white-space: nowrap; }
+    .actions { display: grid; grid-template-columns: 1fr; gap: 9px; margin-top: 11px; }
+    .restart { min-height: 47px; color: #17203a; border: 0; background: linear-gradient(100deg, #a5f3d2, #92d9ff); box-shadow: 0 8px 25px rgba(103,214,206,.15); }
+    .restart:hover:not(:disabled) { background: linear-gradient(100deg, #b6f9dd, #a5e3ff); }
+    .help { margin: 15px 3px 0; color: #9caaca; font-size: 11px; line-height: 1.55; text-align: center; }
+    .help strong { color: #d7e0fb; }
+    .footer { margin-top: 12px; color: #7683a5; font-size: 10px; text-align: center; letter-spacing: .04em; }
+    @media (max-height: 690px) and (min-width: 500px) { .canvas-wrap { height: 410px; } }
+    @media (max-width: 370px) { body { padding-left: 10px; padding-right: 10px; } .ammo-bar { gap: 6px; padding: 10px 8px; } .swap { padding: 0 8px; } .ammo { gap: 6px; } }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; } }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <div class="topline">
+      <div class="brand"><span class="brand-mark" aria-hidden="true"></span> Bolhas em órbita</div>
+      <span class="tag">PROTÓTIPO JOGÁVEL</span>
+    </div>
+    <header>
+      <h1>Limpe o tabuleiro.</h1>
+      <p class="intro">Mire, planeje o ricochete e conecte três ou mais bolhas da mesma cor.</p>
+    </header>
+
+    <section class="hud" aria-label="Placar da partida">
+      <div class="stat"><div><span class="stat-label">Pontuação</span><span class="stat-value" id="scoreValue">0</span></div><span class="stat-icon" aria-hidden="true">✦</span></div>
+      <div class="stat"><div><span class="stat-label">Disparos restantes</span><span class="stat-value" id="shotsValue">32</span></div><span class="stat-icon" aria-hidden="true">◉</span></div>
+    </section>
+
+    <section class="game-panel" aria-label="Área do jogo">
+      <div class="status-line" aria-live="polite"><span class="status-dot" aria-hidden="true"></span><span id="statusText">Mire e toque no tabuleiro para disparar</span></div>
+      <div class="canvas-wrap">
+        <canvas id="gameCanvas" aria-label="Tabuleiro de bolhas. Mova o ponteiro para mirar e clique ou toque para disparar."></canvas>
+      </div>
+      <div class="ammo-bar" aria-label="Bolhas disponíveis">
+        <div class="ammo"><span class="swatch" id="currentSwatch" aria-hidden="true"></span><span class="ammo-copy"><span class="ammo-label">Bolha atual</span><span class="ammo-name" id="currentName">—</span></span></div>
+        <div class="ammo"><span class="swatch" id="nextSwatch" aria-hidden="true"></span><span class="ammo-copy"><span class="ammo-label">Próxima</span><span class="ammo-name" id="nextName">—</span></span></div>
+        <button class="swap" id="swapButton" type="button" aria-label="Trocar a bolha atual pela próxima">Trocar ↔</button>
+      </div>
+    </section>
+
+    <div class="actions"><button class="restart" id="restartButton" type="button">Jogar de novo</button></div>
+    <p class="help"><strong>Como jogar:</strong> a linha pontilhada mostra a mira. Toque ou clique onde quer lançar. Use <strong>Trocar</strong> para alternar entre a bolha atual e a próxima.</p>
+    <p class="footer">Partida local • Canvas + TypeScript • sem instalação</p>
+  </main>
+  <script>
+    /* O motor compilado de game/browser.ts e dos módulos game/*.ts é inserido aqui. */
+    __GAME_BUNDLE__
+  </script>
+</body>
+</html>
