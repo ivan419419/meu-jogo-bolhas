@@ -1,8 +1,8 @@
 {
   "id": "./",
-  "name": "Bolhas em Órbita",
-  "short_name": "Bolhas",
-  "description": "Mire, estoure bolhas e faça pontos neste jogo de navegador.",
+  "name": "Bolhas em Órbita por Ivan Moreira de Araujo",
+  "short_name": "Bolhas Moreira",
+  "description": "Um jogo de Ivan Moreira de Araujo. Mire, planeje o ricochete e conecte três ou mais bolhas da mesma cor.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

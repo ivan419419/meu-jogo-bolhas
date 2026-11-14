@@ -1,4 +1,4 @@
-# Bolhas em Órbita — protótipo
+# Bolhas em Órbita
 
 Protótipo jogável de Bubble Shooter em Canvas, feito sem engine ou framework pesado. A lógica do tabuleiro continua separada do desenho: `game/browser.ts` importa `HexGrid` de `game/logica.ts`, movimento/encaixe de `game/tiro.ts` e resolução de grupos/queda de `game/estouro.ts`.
 
