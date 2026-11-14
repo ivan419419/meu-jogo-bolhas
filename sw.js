@@ -1,4 +1,4 @@
-const CACHE_NAME = "bolhas-shell-v1";
+const CACHE_NAME = "bolhas-shell-v2";
 const APP_SHELL_URL = new URL("./", self.registration.scope).href;
 const PRECACHE_URLS = [
   APP_SHELL_URL,

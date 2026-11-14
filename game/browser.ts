@@ -1,6 +1,7 @@
 import { HexGrid, type HexCoord } from "./logica";
 import { atirar, encaixar, moverTiro, type Tiro } from "./tiro";
 import { resolverEstouro } from "./estouro";
+import { criarGeradorDesafio, lerSementeDesafio } from "./desafio";
 
 type CorBolha = "coral" | "azul" | "menta" | "amarelo" | "violeta";
 
@@ -29,6 +30,11 @@ const nextSwatch = document.querySelector<HTMLElement>("#nextSwatch")!;
 const statusText = document.querySelector<HTMLElement>("#statusText")!;
 const swapButton = document.querySelector<HTMLButtonElement>("#swapButton")!;
 const restartButton = document.querySelector<HTMLButtonElement>("#restartButton")!;
+const challengeLabel = document.querySelector<HTMLElement>("#challengeLabel")!;
+const challengeDescription = document.querySelector<HTMLElement>("#challengeDescription")!;
+const challengeFeedback = document.querySelector<HTMLElement>("#challengeFeedback")!;
+const challengeButton = document.querySelector<HTMLButtonElement>("#challengeButton")!;
+const scoreShareButton = document.querySelector<HTMLButtonElement>("#scoreShareButton")!;
 
 const padraoInicial: CorBolha[][] = [
   ["coral", "coral", "coral", "menta", "menta", "menta", "amarelo", "amarelo", "amarelo"],
@@ -77,6 +83,8 @@ let particles: Particle[] = [];
 let lastFrame = performance.now();
 let notice = "";
 let noticeUntil = 0;
+let challengeSeed = lerSementeDesafio(new URLSearchParams(window.location.search).get("desafio"));
+let gameRandom: () => number = Math.random;
 
 function centroDaCelula(coord: HexCoord): { x: number; y: number } {
   return {
@@ -93,10 +101,86 @@ function novasCoresDisponiveis(board = grid): CorBolha[] {
 
 function escolherCor(board = grid): CorBolha {
   const disponiveis = novasCoresDisponiveis(board);
-  return disponiveis[Math.floor(Math.random() * disponiveis.length)] ?? "coral";
+  return disponiveis[Math.floor(gameRandom() * disponiveis.length)] ?? "coral";
+}
+
+function codigoDesafio(seed: number): string {
+  return seed.toString(36).toUpperCase();
+}
+
+function atualizarModoDesafio(): void {
+  challengeLabel.textContent = challengeSeed === null ? "PARTIDA LIVRE" : `DESAFIO ${codigoDesafio(challengeSeed)}`;
+  challengeDescription.textContent = challengeSeed === null
+    ? "Crie um link para todo mundo jogar a mesma fase."
+    : "Mesmo tabuleiro e mesma semente para comparar pontuações.";
+  challengeButton.textContent = challengeSeed === null ? "Criar desafio" : "Compartilhar desafio";
+}
+
+function gerarSementeDesafio(): number {
+  if (window.crypto?.getRandomValues) {
+    const values = new Uint32Array(1);
+    window.crypto.getRandomValues(values);
+    return values[0] || 1;
+  }
+  return Math.max(1, Math.floor(Math.random() * 0xffffffff));
+}
+
+function urlDoDesafio(seed: number): string {
+  const url = new URL(window.location.href);
+  url.searchParams.set("desafio", String(seed));
+  return url.toString();
+}
+
+async function compartilharOuCopiar(titulo: string, texto: string, url: string): Promise<void> {
+  try {
+    if (navigator.share) {
+      await navigator.share({ title: titulo, text: texto, url });
+      challengeFeedback.textContent = "Pronto para compartilhar.";
+    } else {
+      const conteudo = `${texto}\n${url}`;
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(conteudo);
+      } else {
+        const campo = document.createElement("textarea");
+        campo.value = conteudo;
+        campo.setAttribute("readonly", "");
+        campo.style.position = "fixed";
+        campo.style.opacity = "0";
+        document.body.append(campo);
+        campo.select();
+        const copiado = document.execCommand("copy");
+        campo.remove();
+        if (!copiado) throw new Error("A cópia não foi autorizada pelo navegador.");
+      }
+      challengeFeedback.textContent = "Link copiado. Cole na conversa para desafiar alguém.";
+    }
+  } catch (error) {
+    challengeFeedback.textContent = error instanceof DOMException && error.name === "AbortError"
+      ? "Compartilhamento cancelado."
+      : "Não consegui compartilhar automaticamente. Tente novamente.";
+  }
+}
+
+async function compartilharDesafio(): Promise<void> {
+  if (challengeSeed === null) {
+    challengeSeed = gerarSementeDesafio();
+    const url = new URL(urlDoDesafio(challengeSeed));
+    window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+    iniciarPartida();
+  }
+  const url = urlDoDesafio(challengeSeed);
+  await compartilharOuCopiar("Desafio de Bolhas em Órbita", "Jogue comigo nesta mesma fase:", url);
+}
+
+async function compartilharResultado(): Promise<void> {
+  if (challengeSeed === null) return;
+  const pontos = score.toLocaleString("pt-BR");
+  const texto = `Fiz ${pontos} pontos no desafio ${codigoDesafio(challengeSeed)} de Bolhas em Órbita. Consegue superar?`;
+  await compartilharOuCopiar("Meu placar no desafio de bolhas", texto, urlDoDesafio(challengeSeed));
 }
 
 function iniciarPartida(): void {
+  gameRandom = challengeSeed === null ? Math.random : criarGeradorDesafio(challengeSeed);
   const matrix: Array<Array<CorBolha | null>> = Array.from({ length: LINHAS }, () => Array<CorBolha | null>(COLUNAS).fill(null));
   padraoInicial.forEach((row, r) => row.forEach((color, c) => { matrix[r][c] = color; }));
   grid = new HexGrid<CorBolha>(matrix);
@@ -109,6 +193,7 @@ function iniciarPartida(): void {
   next = escolherCor();
   notice = "Acerte três bolhas da mesma cor para estourá-las.";
   noticeUntil = performance.now() + 3600;
+  atualizarModoDesafio();
   atualizarPainel();
   desenhar();
 }
@@ -301,6 +386,7 @@ function atualizarPainel(): void {
           ? notice
           : "Mire e toque no tabuleiro para disparar";
   statusText.classList.toggle("is-result", Boolean(gameOver));
+  scoreShareButton.hidden = challengeSeed === null || gameOver === null;
 }
 
 function desenharBolha(x: number, y: number, radius: number, color: CorBolha, mark = true): void {
@@ -552,6 +638,8 @@ canvas.addEventListener("pointerdown", (event) => {
 });
 swapButton.addEventListener("click", trocarBolhas);
 restartButton.addEventListener("click", iniciarPartida);
+challengeButton.addEventListener("click", () => { void compartilharDesafio(); });
+scoreShareButton.addEventListener("click", () => { void compartilharResultado(); });
 window.addEventListener("resize", atualizarLayout);
 
 iniciarPartida();

@@ -38,6 +38,13 @@
     header { margin-bottom: 17px; }
     h1 { margin: 0; font-size: clamp(25px, 7vw, 34px); letter-spacing: -.045em; line-height: 1.08; }
     .intro { margin: 8px 0 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
+    .challenge-card { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 11px; padding: 11px 12px; border: 1px solid rgba(143,171,245,.19); border-radius: 16px; background: rgba(28,40,73,.72); }
+    .challenge-copy { min-width: 0; }
+    .challenge-label { display: block; color: #a9c5ff; font-size: 9px; font-weight: 850; letter-spacing: .1em; }
+    .challenge-description { margin: 4px 0 0; color: var(--muted); font-size: 11px; line-height: 1.35; }
+    .challenge-button { flex: 0 0 auto; padding: 0 12px; color: #17203a; border: 0; background: linear-gradient(100deg, #a5f3d2, #92d9ff); }
+    .challenge-feedback { min-height: 0; margin: -5px 3px 9px; color: #a8d9ff; font-size: 10px; line-height: 1.35; text-align: center; }
+    .challenge-feedback:empty { display: none; }
     .hud { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
     .stat { min-height: 58px; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 14px; border: 1px solid var(--line); border-radius: 16px; background: var(--panel); box-shadow: 0 10px 28px rgba(0,0,0,.12); }
     .stat-label { display: block; color: var(--muted); font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
@@ -64,6 +71,7 @@
     .actions { display: grid; grid-template-columns: 1fr; gap: 9px; margin-top: 11px; }
     .restart { min-height: 47px; color: #17203a; border: 0; background: linear-gradient(100deg, #a5f3d2, #92d9ff); box-shadow: 0 8px 25px rgba(103,214,206,.15); }
     .restart:hover:not(:disabled) { background: linear-gradient(100deg, #b6f9dd, #a5e3ff); }
+    .score-share { min-height: 47px; }
     .help { margin: 15px 3px 0; color: #9caaca; font-size: 11px; line-height: 1.55; text-align: center; }
     .help strong { color: #d7e0fb; }
     .footer { margin-top: 12px; color: #7683a5; font-size: 10px; text-align: center; letter-spacing: .04em; }
@@ -83,6 +91,15 @@
       <p class="intro">Mire, planeje o ricochete e conecte três ou mais bolhas da mesma cor.</p>
     </header>
 
+    <section class="challenge-card" aria-label="Desafio compartilhável">
+      <div class="challenge-copy">
+        <span class="challenge-label" id="challengeLabel">PARTIDA LIVRE</span>
+        <p class="challenge-description" id="challengeDescription">Crie um link para todo mundo jogar a mesma fase.</p>
+      </div>
+      <button class="challenge-button" id="challengeButton" type="button">Criar desafio</button>
+    </section>
+    <p class="challenge-feedback" id="challengeFeedback" aria-live="polite"></p>
+
     <section class="hud" aria-label="Placar da partida">
       <div class="stat"><div><span class="stat-label">Pontuação</span><span class="stat-value" id="scoreValue">0</span></div><span class="stat-icon" aria-hidden="true">✦</span></div>
       <div class="stat"><div><span class="stat-label">Disparos restantes</span><span class="stat-value" id="shotsValue">32</span></div><span class="stat-icon" aria-hidden="true">◉</span></div>
@@ -100,9 +117,12 @@
       </div>
     </section>
 
-    <div class="actions"><button class="restart" id="restartButton" type="button">Jogar de novo</button></div>
+    <div class="actions">
+      <button class="restart" id="restartButton" type="button">Jogar de novo</button>
+      <button class="score-share" id="scoreShareButton" type="button" hidden>Compartilhar placar</button>
+    </div>
     <p class="help"><strong>Como jogar:</strong> a linha pontilhada mostra a mira. Toque ou clique onde quer lançar. Use <strong>Trocar</strong> para alternar entre a bolha atual e a próxima.</p>
-    <p class="footer">Partida local • Canvas + TypeScript • sem instalação</p>
+    <p class="footer">Partida local • compartilhe o link e compare os placares</p>
   </main>
   <script>
     /* O motor compilado de game/browser.ts e dos módulos game/*.ts é inserido aqui. */
