@@ -35,6 +35,7 @@ const challengeDescription = document.querySelector<HTMLElement>("#challengeDesc
 const challengeFeedback = document.querySelector<HTMLElement>("#challengeFeedback")!;
 const challengeButton = document.querySelector<HTMLButtonElement>("#challengeButton")!;
 const scoreShareButton = document.querySelector<HTMLButtonElement>("#scoreShareButton")!;
+const tiktokEndLink = document.querySelector<HTMLAnchorElement>("#tiktokEndLink")!;
 
 const padraoInicial: CorBolha[][] = [
   ["coral", "coral", "coral", "menta", "menta", "menta", "amarelo", "amarelo", "amarelo"],
@@ -175,7 +176,7 @@ async function compartilharDesafio(): Promise<void> {
 async function compartilharResultado(): Promise<void> {
   if (challengeSeed === null) return;
   const pontos = score.toLocaleString("pt-BR");
-  const texto = `Fiz ${pontos} pontos no desafio ${codigoDesafio(challengeSeed)} de Bolhas em Órbita. Consegue superar?`;
+  const texto = `Fiz ${pontos} pontos no desafio ${codigoDesafio(challengeSeed)} de Bolhas em Órbita. Consegue superar?\n\nMe segue no TikTok @achadosanosdourados - https://tiktok.com/@achadosanosdourados`;
   await compartilharOuCopiar("Meu placar no desafio de bolhas", texto, urlDoDesafio(challengeSeed));
 }
 
@@ -387,6 +388,7 @@ function atualizarPainel(): void {
           : "Mire e toque no tabuleiro para disparar";
   statusText.classList.toggle("is-result", Boolean(gameOver));
   scoreShareButton.hidden = challengeSeed === null || gameOver === null;
+  tiktokEndLink.hidden = gameOver === null;
 }
 
 function desenharBolha(x: number, y: number, radius: number, color: CorBolha, mark = true): void {
