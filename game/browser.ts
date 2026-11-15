@@ -50,6 +50,7 @@ const challengeCard = document.querySelector<HTMLElement>("#challengeCard")!;
 const campaignButton = document.querySelector<HTMLButtonElement>("#campaignButton")!;
 const nextCampaignButton = document.querySelector<HTMLButtonElement>("#nextCampaignButton")!;
 const fenixButton = document.querySelector<HTMLButtonElement>("#fenixButton")!;
+const introHelp = document.querySelector<HTMLElement>("#introHelp")!;
 
 const padraoInicial: CorBolha[][] = [
   ["coral", "coral", "coral", "menta", "menta", "menta", "amarelo", "amarelo", "amarelo"],
@@ -165,6 +166,7 @@ let campaignLevel = progressoPendente?.fase ?? 1;
 let animationFrameId = 0;
 let loopStopped = false;
 let transitionTimer: number | null = null;
+let introHelpTimer: number | null = null;
 let transitionStarted = false;
 const gameListeners = new AbortController();
 
@@ -305,9 +307,23 @@ function limparTimerTransicao(): void {
   transitionTimer = null;
 }
 
+function ocultarAjudaInicial(): void {
+  if (introHelpTimer !== null) window.clearTimeout(introHelpTimer);
+  introHelpTimer = null;
+  introHelp.hidden = true;
+}
+
+function agendarOcultarAjudaInicial(): void {
+  if (introHelp.hidden) return;
+  if (introHelpTimer !== null) window.clearTimeout(introHelpTimer);
+  // Esconder após o evento atual evita mexer na posição do tabuleiro antes de calcular um toque.
+  introHelpTimer = window.setTimeout(ocultarAjudaInicial, 0);
+}
+
 function encerrarJogoAnterior(): void {
   if (loopStopped) return;
   loopStopped = true;
+  ocultarAjudaInicial();
   if (animationFrameId !== 0) window.cancelAnimationFrame(animationFrameId);
   animationFrameId = 0;
   limparTimerTransicao();
@@ -847,6 +863,9 @@ function frame(now: number): void {
 }
 
 const listenerOptions: AddEventListenerOptions = { signal: gameListeners.signal };
+introHelpTimer = window.setTimeout(ocultarAjudaInicial, 6500);
+window.addEventListener("pointerdown", agendarOcultarAjudaInicial, listenerOptions);
+window.addEventListener("keydown", agendarOcultarAjudaInicial, listenerOptions);
 canvas.addEventListener("pointermove", (event) => {
   const rect = canvas.getBoundingClientRect();
   aimPoint = { x: event.clientX - rect.left, y: event.clientY - rect.top };

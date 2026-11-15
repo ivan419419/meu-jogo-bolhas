@@ -86,6 +86,8 @@
     .tiktok-end:focus-visible { outline: 3px solid #84c9ff; outline-offset: 2px; }
     .tiktok-end[hidden] { display: none; }
     .help { margin: 15px 3px 0; color: #9caaca; font-size: 11px; line-height: 1.55; text-align: center; }
+    .intro-help { margin: 8px 0 0; }
+    .intro-help[hidden] { display: none; }
     .help strong { color: #d7e0fb; }
     .footer { margin-top: 12px; color: #7683a5; font-size: 10px; text-align: center; letter-spacing: .04em; }
     .footer a { color: #a8c5ff; text-decoration: underline; text-underline-offset: 2px; }
@@ -103,6 +105,7 @@
     <header>
       <h1>Bolhas em Órbita</h1>
       <p class="intro">Um jogo de Ivan Moreira de Araujo</p>
+      <p class="help intro-help" id="introHelp">Combine três bolhas da mesma cor para estourá-las. Toque ou clique para lançar; no teclado, use ← →, Espaço e X.</p>
     </header>
 
     <section class="challenge-card" id="challengeCard" aria-label="Desafio compartilhável">
@@ -139,7 +142,6 @@
       <button class="score-share" id="scoreShareButton" type="button" hidden>Compartilhar placar</button>
       <a class="tiktok-end" id="tiktokEndLink" href="https://tiktok.com/@achadosanosdourados" target="_blank" rel="noopener noreferrer" hidden>Seguir no TikTok @achadosanosdourados</a>
     </div>
-    <p class="help"><strong>Como jogar:</strong> a linha pontilhada mostra a mira. Toque ou clique onde quer lançar. Use <strong>Trocar</strong> para alternar entre a bolha atual e a próxima.<br><strong>Teclado:</strong> ← → para mirar, Espaço para disparar, X para trocar e Enter para avançar após uma vitória na campanha.<br><strong>Campanha (preview):</strong> 10 fases, sem alterar a partida livre ou o desafio por link. Limpe cada tabuleiro para avançar; seu progresso fica salvo neste dispositivo.</p>
     <p class="footer">Um jogo de Ivan Moreira de Araujo • Siga no TikTok <a href="https://tiktok.com/@achadosanosdourados" target="_blank" rel="noopener noreferrer">@achadosanosdourados</a></p>
   </main>
   <script>

@@ -155,7 +155,7 @@ function makeContext(search = "", storage = new Map()) {
     "#currentSwatch", "#nextSwatch", "#statusText", "#swapButton", "#restartButton",
     "#challengeLabel", "#challengeDescription", "#challengeFeedback", "#challengeButton",
     "#scoreShareButton", "#tiktokEndLink", "#challengeCard", "#campaignButton",
-    "#nextCampaignButton", "#fenixButton",
+    "#nextCampaignButton", "#fenixButton", "#introHelp",
   ];
   for (const selector of selectors) elements.set(selector, new FakeElement(selector));
   const canvas = elements.get("#gameCanvas");
@@ -272,7 +272,12 @@ async function freshGame(search = "", storage = new Map()) {
   return game;
 }
 
-const click = (game, selector) => game.elements.get(selector).dispatch("click");
+const click = (game, selector) => {
+  game.windowListeners.dispatch("pointerdown", { pointerType: "mouse" });
+  game.elements.get(selector).dispatch("click");
+  const deferredHide = [...game.timers].find(([, timer]) => timer.delay === 0);
+  if (deferredHide) game.flushTimer(deferredHide[0]);
+};
 const colorsCount = (matrix) => matrix.flat().filter((cell) => cell !== null).length;
 
 // Também garante que o arquivo de dados de campanha seja compilável sem depender de UI.
@@ -325,6 +330,35 @@ test("partida livre conserva o tabuleiro original de 63 bolhas e 32 tiros", asyn
   assert.equal(state.challengeSeed, null);
   assert.equal(colorsCount(state.grid), 63);
   assert.equal(state.shotsLeft, 32);
+});
+
+test("instrução da abertura some após o primeiro toque, tecla ou 6,5 segundos", async () => {
+  const touch = await freshGame();
+  const touchHelp = touch.elements.get("#introHelp");
+  assert.equal(touchHelp.hidden, false);
+  assert.equal([...touch.timers.values()][0].delay, 6500);
+  touch.windowListeners.dispatch("pointerdown", { pointerType: "touch" });
+  const touchHide = [...touch.timers].find(([, timer]) => timer.delay === 0);
+  assert.ok(touchHide, "toque agenda a remoção após o evento atual");
+  assert.equal(touchHelp.hidden, false, "o tabuleiro não muda de posição durante o evento do toque");
+  touch.flushTimer(touchHide[0]);
+  assert.equal(touchHelp.hidden, true);
+  assert.equal(touch.timers.size, 0);
+
+  const keyboard = await freshGame();
+  keyboard.windowListeners.dispatch("keydown", {
+    code: "ArrowRight",
+    target: keyboard.elements.get("#gameCanvas"),
+    preventDefault() {},
+  });
+  const keyboardHide = [...keyboard.timers].find(([, timer]) => timer.delay === 0);
+  assert.ok(keyboardHide, "tecla agenda o fechamento da instrução");
+  keyboard.flushTimer(keyboardHide[0]);
+  assert.equal(keyboard.elements.get("#introHelp").hidden, true);
+
+  const elapsed = await freshGame();
+  elapsed.flushTimer();
+  assert.equal(elapsed.elements.get("#introHelp").hidden, true);
 });
 
 test("desafio mantém tabuleiro e cores seeded iguais ao reiniciar, com 63 bolhas e 32 tiros", async () => {
