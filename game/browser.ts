@@ -84,6 +84,64 @@ interface Particle {
   size: number;
 }
 
+interface ProgressoCampanha {
+  version: 1;
+  fase: number;
+  tabuleiro: Array<Array<CorBolha | null>>;
+  atual: CorBolha;
+  proxima: CorBolha;
+  sorteios: number;
+  tiros: number;
+  pontuacao: number;
+  resultado: "won" | "lost" | null;
+}
+
+const CHAVE_PROGRESSO_CAMPANHA = "bolhas-fenix-campanha-v1";
+const CORES_VALIDAS = new Set<CorBolha>(["coral", "azul", "menta", "amarelo", "violeta"]);
+
+function lerProgressoCampanha(): ProgressoCampanha | null {
+  try {
+    const raw = window.localStorage.getItem(CHAVE_PROGRESSO_CAMPANHA);
+    if (!raw || raw.length > 24_000) return null;
+    const value = JSON.parse(raw) as Partial<ProgressoCampanha>;
+    if (!value || value.version !== 1 || !Number.isInteger(value.fase)) throw new Error("versão/fase inválida");
+    const config = obterConfiguracaoFaseCampanha(value.fase!);
+    if (!Array.isArray(value.tabuleiro) || value.tabuleiro.length !== LINHAS) throw new Error("tabuleiro inválido");
+    const tabuleiro = value.tabuleiro.map((row) => {
+      if (!Array.isArray(row) || row.length !== COLUNAS) throw new Error("linha inválida");
+      return row.map((cell) => {
+        if (cell !== null && !CORES_VALIDAS.has(cell)) throw new Error("cor inválida");
+        return cell;
+      });
+    });
+    if (!CORES_VALIDAS.has(value.atual!) || !CORES_VALIDAS.has(value.proxima!)) throw new Error("munição inválida");
+    if (!Number.isInteger(value.sorteios) || value.sorteios! < 0 || value.sorteios! > 1_000) throw new Error("sequência inválida");
+    if (!Number.isInteger(value.tiros) || value.tiros! < 0 || value.tiros! > config.tiros) throw new Error("disparos inválidos");
+    if (!Number.isSafeInteger(value.pontuacao) || value.pontuacao! < 0 || value.pontuacao! > 1_000_000_000) {
+      throw new Error("pontuação inválida");
+    }
+    if (value.resultado !== null && value.resultado !== "won" && value.resultado !== "lost") throw new Error("resultado inválido");
+    const vazias = tabuleiro.flat().every((cell) => cell === null);
+    if ((value.resultado === "won") !== vazias || (value.resultado === null && value.tiros === 0)) {
+      throw new Error("estado de partida incoerente");
+    }
+    return {
+      version: 1,
+      fase: value.fase!,
+      tabuleiro,
+      atual: value.atual!,
+      proxima: value.proxima!,
+      sorteios: value.sorteios!,
+      tiros: value.tiros!,
+      pontuacao: value.pontuacao!,
+      resultado: value.resultado!,
+    };
+  } catch {
+    try { window.localStorage.removeItem(CHAVE_PROGRESSO_CAMPANHA); } catch { /* armazenamento indisponível */ }
+    return null;
+  }
+}
+
 let grid: HexGrid<CorBolha>;
 let layout: Layout;
 let current: CorBolha;
@@ -99,14 +157,36 @@ let lastFrame = performance.now();
 let notice = "";
 let noticeUntil = 0;
 let challengeSeed = lerSementeDesafio(new URLSearchParams(window.location.search).get("desafio"));
+let progressoPendente = challengeSeed === null ? lerProgressoCampanha() : null;
 let gameRandom: () => number = Math.random;
-let campaignActive = false;
-let campaignLevel = 1;
+let randomDraws = 0;
+let campaignActive = challengeSeed === null && new URLSearchParams(window.location.search).get("campanha") === "1";
+let campaignLevel = progressoPendente?.fase ?? 1;
 let animationFrameId = 0;
 let loopStopped = false;
 let transitionTimer: number | null = null;
 let transitionStarted = false;
 const gameListeners = new AbortController();
+
+function salvarProgressoCampanha(): void {
+  if (!campaignActive || challengeSeed !== null) return;
+  try {
+    const state: ProgressoCampanha = {
+      version: 1,
+      fase: campaignLevel,
+      tabuleiro: grid.toMatrix(),
+      atual: current,
+      proxima: next,
+      sorteios: randomDraws,
+      tiros: shotsLeft,
+      pontuacao: score,
+      resultado: gameOver,
+    };
+    window.localStorage.setItem(CHAVE_PROGRESSO_CAMPANHA, JSON.stringify(state));
+  } catch {
+    // Storage pode estar desativado ou sem espaço; a campanha continua nesta sessão.
+  }
+}
 
 function centroDaCelula(coord: HexCoord): { x: number; y: number } {
   return {
@@ -123,6 +203,7 @@ function novasCoresDisponiveis(board = grid): CorBolha[] {
 
 function escolherCor(board = grid): CorBolha {
   const disponiveis = novasCoresDisponiveis(board);
+  randomDraws += 1;
   return disponiveis[Math.floor(gameRandom() * disponiveis.length)] ?? "coral";
 }
 
@@ -135,7 +216,7 @@ function atualizarModoDesafio(): void {
     challengeCard.hidden = false;
     challengeFeedback.hidden = true;
     challengeLabel.textContent = `CAMPANHA • FASE ${campaignLevel}/${TOTAL_FASES_CAMPANHA}`;
-    challengeDescription.textContent = "Limpe o tabuleiro para avançar. Depois da fase 10, você segue para Fênix Blast.";
+    challengeDescription.textContent = "Limpe o tabuleiro para avançar. Seu progresso fica salvo neste dispositivo.";
     challengeButton.hidden = true;
     return;
   }
@@ -162,6 +243,13 @@ function urlDoDesafio(seed: number): string {
   const url = new URL(window.location.href);
   url.searchParams.set("desafio", String(seed));
   return url.toString();
+}
+
+function atualizarRotaCampanha(ativa: boolean): void {
+  const url = new URL(window.location.href);
+  if (ativa) url.searchParams.set("campanha", "1");
+  else url.searchParams.delete("campanha");
+  window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
 }
 
 async function compartilharOuCopiar(titulo: string, texto: string, url: string): Promise<void> {
@@ -241,7 +329,8 @@ function iniciarCampanha(): void {
   if (challengeSeed !== null) return;
   limparTimerTransicao();
   campaignActive = true;
-  campaignLevel = 1;
+  campaignLevel = progressoPendente?.fase ?? 1;
+  atualizarRotaCampanha(true);
   transitionStarted = false;
   iniciarPartida();
 }
@@ -250,6 +339,8 @@ function sairDaCampanha(): void {
   limparTimerTransicao();
   campaignActive = false;
   campaignLevel = 1;
+  atualizarRotaCampanha(false);
+  progressoPendente = challengeSeed === null ? lerProgressoCampanha() : null;
   transitionStarted = false;
   iniciarPartida();
 }
@@ -263,27 +354,40 @@ function avancarFaseCampanha(): void {
 function iniciarPartida(): void {
   limparTimerTransicao();
   transitionStarted = false;
+  const restaurar = campaignActive && progressoPendente?.fase === campaignLevel ? progressoPendente : null;
+  if (campaignActive) progressoPendente = null;
   gameRandom = campaignActive
     ? criarGeradorDesafio(campaignLevel * 9973)
     : challengeSeed === null ? Math.random : criarGeradorDesafio(challengeSeed);
-  const matrix = campaignActive
+  randomDraws = 0;
+  if (restaurar) {
+    for (let i = 0; i < restaurar.sorteios; i += 1) gameRandom();
+    randomDraws = restaurar.sorteios;
+  }
+  const matrix = restaurar?.tabuleiro ?? (campaignActive
     ? criarTabuleiroCampanha(campaignLevel)
-    : Array.from({ length: LINHAS }, () => Array<CorBolha | null>(COLUNAS).fill(null));
+    : Array.from({ length: LINHAS }, () => Array<CorBolha | null>(COLUNAS).fill(null)));
   if (!campaignActive) padraoInicial.forEach((row, r) => row.forEach((color, c) => { matrix[r]![c] = color; }));
   grid = new HexGrid<CorBolha>(matrix);
-  score = 0;
-  shotsLeft = campaignActive ? obterConfiguracaoFaseCampanha(campaignLevel).tiros : TIROS_INICIAIS;
+  score = restaurar?.pontuacao ?? 0;
+  shotsLeft = restaurar?.tiros ?? (campaignActive ? obterConfiguracaoFaseCampanha(campaignLevel).tiros : TIROS_INICIAIS);
   pointerInside = false;
   activeShot = null;
-  gameOver = null;
+  gameOver = restaurar?.resultado ?? null;
   particles = [];
-  current = escolherCor();
-  next = escolherCor();
-  notice = "Acerte três bolhas da mesma cor para estourá-las.";
-  noticeUntil = performance.now() + 3600;
+  current = restaurar?.atual ?? escolherCor();
+  next = restaurar?.proxima ?? escolherCor();
+  notice = restaurar
+    ? gameOver === "won" ? "Vitória salva. Avance para continuar." : gameOver === "lost" ? "Partida salva. Reinicie para tentar novamente." : "Partida restaurada. Continue de onde parou."
+    : "Acerte três bolhas da mesma cor para estourá-las.";
+  noticeUntil = gameOver ? Number.POSITIVE_INFINITY : performance.now() + 3600;
   atualizarModoDesafio();
   atualizarPainel();
   desenhar();
+  salvarProgressoCampanha();
+  if (campaignActive && gameOver === "won" && campaignLevel === TOTAL_FASES_CAMPANHA) {
+    transitionTimer = window.setTimeout(abrirFenixBlast, 6000);
+  }
 }
 
 function atualizarLayout(): void {
@@ -376,6 +480,7 @@ function encaixarTiro(): void {
     noticeUntil = performance.now() + 4000;
     gameOver = "lost";
     atualizarPainel();
+    salvarProgressoCampanha();
     return;
   }
 
@@ -418,6 +523,7 @@ function encaixarTiro(): void {
     transitionTimer = window.setTimeout(abrirFenixBlast, 6000);
   }
   atualizarPainel();
+  salvarProgressoCampanha();
 }
 
 function checarDerrota(): boolean {
@@ -455,6 +561,7 @@ function trocarBolhas(): void {
   if (gameOver || activeShot) return;
   [current, next] = [next, current];
   atualizarPainel();
+  salvarProgressoCampanha();
 }
 
 function atualizarPainel(): void {
@@ -480,9 +587,12 @@ function atualizarPainel(): void {
   scoreShareButton.hidden = campaignActive || challengeSeed === null || gameOver === null;
   tiktokEndLink.hidden = gameOver === null;
   campaignButton.hidden = challengeSeed !== null && !campaignActive;
-  campaignButton.textContent = campaignActive ? "Sair da campanha" : "Jogar campanha • 10 fases";
+  campaignButton.textContent = campaignActive
+    ? "Sair da campanha"
+    : progressoPendente ? `Continuar campanha • fase ${progressoPendente.fase}/${TOTAL_FASES_CAMPANHA}` : "Jogar campanha • 10 fases";
   nextCampaignButton.hidden = !campaignActive || gameOver !== "won" || campaignLevel >= TOTAL_FASES_CAMPANHA;
   fenixButton.hidden = !campaignActive || gameOver !== "won" || campaignLevel !== TOTAL_FASES_CAMPANHA;
+  fenixButton.textContent = fenixButton.hidden ? "Continuar" : "Ir ao Fênix Blast agora";
   restartButton.textContent = campaignActive ? "Reiniciar fase" : "Jogar de novo";
 }
 

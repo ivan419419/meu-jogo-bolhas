@@ -73,7 +73,7 @@ async function getBundle() {
   return bundledCode;
 }
 
-function makeContext(search = "") {
+function makeContext(search = "", storage = new Map()) {
   const elements = new Map();
   const rafs = new Map();
   const timers = new Map();
@@ -169,9 +169,25 @@ function makeContext(search = "") {
     assign(url) { assignedUrls.push(url); },
     reload() { reloads.push(true); },
   };
+  const localStorage = {
+    getItem(key) { return storage.get(key) ?? null; },
+    setItem(key, value) { storage.set(key, String(value)); },
+    removeItem(key) { storage.delete(key); },
+  };
   const window = {
     location,
-    history: { state: null, replaceState() {} },
+    localStorage,
+    history: {
+      state: null,
+      replaceState(_state, _title, nextUrl) {
+        if (!nextUrl) return;
+        const parsed = new URL(nextUrl, location.href);
+        location.href = parsed.toString();
+        location.search = parsed.search;
+        location.pathname = parsed.pathname;
+        location.hash = parsed.hash;
+      },
+    },
     devicePixelRatio: 1,
     crypto: undefined,
     addEventListener: windowListeners.addEventListener.bind(windowListeners),
@@ -220,6 +236,7 @@ function makeContext(search = "") {
   return {
     api: sandbox.__test,
     elements,
+    storage,
     window,
     windowListeners,
     rafs,
@@ -247,9 +264,9 @@ function makeContext(search = "") {
   };
 }
 
-async function freshGame(search = "") {
+async function freshGame(search = "", storage = new Map()) {
   await getBundle();
-  const game = makeContext(search);
+  const game = makeContext(search, storage);
   // Executa o bootstrap RAF para calcular layout/centros sem depender de relógio real.
   game.flushRaf();
   return game;
@@ -325,6 +342,68 @@ test("desafio mantém tabuleiro e cores seeded iguais ao reiniciar, com 63 bolha
   assert.equal(restarted.shotsLeft, 32);
 });
 
+test("campanha restaura fase, tabuleiro, pontuação, munição e vitória após recarregar sem revelar o destino antes do final", async () => {
+  const storage = new Map();
+  const game = await freshGame("", storage);
+  click(game, "#campaignButton");
+  game.api.winWithTopTriple();
+  const savedPhaseOne = JSON.parse(storage.get("bolhas-fenix-campanha-v1"));
+  assert.equal(savedPhaseOne.fase, 1);
+  assert.equal(savedPhaseOne.resultado, "won");
+  assert.equal(savedPhaseOne.tiros, 14);
+
+  const freeMode = await freshGame("", storage);
+  assert.equal(freeMode.api.snapshot.campaignActive, false);
+  assert.equal(freeMode.api.snapshot.shotsLeft, 32);
+  assert.equal(freeMode.elements.get("#campaignButton").textContent, "Continuar campanha • fase 1/10");
+  click(freeMode, "#campaignButton");
+  const restored = freeMode;
+  const state = restored.api.snapshot;
+  assert.equal(state.campaignActive, true);
+  assert.equal(state.campaignLevel, 1);
+  assert.equal(state.gameOver, "won");
+  assert.equal(state.shotsLeft, savedPhaseOne.tiros);
+  assert.equal(state.score, savedPhaseOne.pontuacao);
+  assert.equal(JSON.stringify(state.grid), JSON.stringify(savedPhaseOne.tabuleiro));
+  assert.equal(restored.elements.get("#nextCampaignButton").hidden, false);
+  assert.equal(restored.elements.get("#fenixButton").hidden, true);
+  assert.equal(restored.elements.get("#fenixButton").textContent, "Continuar");
+  assert.doesNotMatch(restored.elements.get("#challengeDescription").textContent, /Fênix|fenix/i);
+  assert.equal(restored.window.location.search, "?campanha=1");
+
+  click(restored, "#nextCampaignButton");
+  assert.equal(restored.api.snapshot.campaignLevel, 2);
+  const savedPhaseTwo = JSON.parse(storage.get("bolhas-fenix-campanha-v1"));
+  assert.equal(savedPhaseTwo.fase, 2);
+  assert.equal(savedPhaseTwo.resultado, null);
+  assert.equal(savedPhaseTwo.tiros, 15);
+  const restoredAgain = await freshGame("?campanha=1", storage);
+  assert.equal(restoredAgain.api.snapshot.campaignLevel, 2);
+  assert.equal(restoredAgain.api.snapshot.shotsLeft, 15);
+  assert.equal(JSON.stringify(restoredAgain.api.snapshot.grid), JSON.stringify(savedPhaseTwo.tabuleiro));
+});
+
+test("parâmetro desafio ignora snapshot da campanha e não o sobrescreve", async () => {
+  const storage = new Map();
+  const campaign = await freshGame("", storage);
+  click(campaign, "#campaignButton");
+  campaign.api.winWithTopTriple();
+  const before = storage.get("bolhas-fenix-campanha-v1");
+  const challenge = await freshGame("?desafio=123456", storage);
+  assert.equal(challenge.api.snapshot.campaignActive, false);
+  assert.equal(challenge.api.snapshot.challengeSeed, 123456);
+  assert.equal(challenge.api.snapshot.shotsLeft, 32);
+  assert.equal(storage.get("bolhas-fenix-campanha-v1"), before);
+});
+
+test("snapshot inválido é descartado sem impedir o modo livre", async () => {
+  const storage = new Map([["bolhas-fenix-campanha-v1", "{json quebrado"]]);
+  const game = await freshGame("", storage);
+  assert.equal(game.api.snapshot.campaignActive, false);
+  assert.equal(game.api.snapshot.shotsLeft, 32);
+  assert.equal(storage.has("bolhas-fenix-campanha-v1"), false);
+});
+
 test("campanha inicia na fase 1 e só avança depois de uma vitória, sem passar da fase 10", async () => {
   const game = await freshGame();
   click(game, "#nextCampaignButton");
@@ -380,6 +459,8 @@ test("vitória real na fase 10 agenda uma única transição; timer navega uma v
   const won = game.api.snapshot;
   assert.equal(won.gameOver, "won");
   assert.equal(won.transitionPending, true);
+  assert.equal(game.elements.get("#fenixButton").hidden, false);
+  assert.equal(game.elements.get("#fenixButton").textContent, "Ir ao Fênix Blast agora");
   assert.equal(game.timers.size, 1);
   assert.equal([...game.timers.values()][0].delay, 6000);
   game.flushTimer();
