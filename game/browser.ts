@@ -218,7 +218,7 @@ function atualizarModoDesafio(): void {
     challengeCard.hidden = false;
     challengeFeedback.hidden = true;
     challengeLabel.textContent = `CAMPANHA • FASE ${campaignLevel}/${TOTAL_FASES_CAMPANHA}`;
-    challengeDescription.textContent = "Limpe o tabuleiro para avançar. Seu progresso fica salvo neste dispositivo.";
+    challengeDescription.textContent = "Seu progresso fica salvo neste dispositivo.";
     challengeButton.hidden = true;
     return;
   }
@@ -395,7 +395,7 @@ function iniciarPartida(): void {
   next = restaurar?.proxima ?? escolherCor();
   notice = restaurar
     ? gameOver === "won" ? "Vitória salva. Avance para continuar." : gameOver === "lost" ? "Partida salva. Reinicie para tentar novamente." : "Partida restaurada. Continue de onde parou."
-    : "Acerte três bolhas da mesma cor para estourá-las.";
+    : "";
   noticeUntil = gameOver ? Number.POSITIVE_INFINITY : performance.now() + 3600;
   atualizarModoDesafio();
   atualizarPainel();
@@ -598,7 +598,7 @@ function atualizarPainel(): void {
         ? "Bolha em voo…"
         : notice && performance.now() < noticeUntil
           ? notice
-          : "Mire e toque no tabuleiro para disparar";
+          : "Partida em andamento";
   statusText.classList.toggle("is-result", Boolean(gameOver));
   scoreShareButton.hidden = campaignActive || challengeSeed === null || gameOver === null;
   tiktokEndLink.hidden = gameOver === null;

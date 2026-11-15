@@ -359,6 +359,10 @@ test("instrução da abertura some após o primeiro toque, tecla ou 6,5 segundos
   const elapsed = await freshGame();
   elapsed.flushTimer();
   assert.equal(elapsed.elements.get("#introHelp").hidden, true);
+  assert.equal(elapsed.elements.get("#statusText").textContent, "Partida em andamento");
+  click(elapsed, "#restartButton");
+  assert.equal(elapsed.elements.get("#introHelp").hidden, true, "reiniciar não reabre instruções");
+  assert.equal(elapsed.elements.get("#statusText").textContent, "Partida em andamento");
 });
 
 test("desafio mantém tabuleiro e cores seeded iguais ao reiniciar, com 63 bolhas e 32 tiros", async () => {
