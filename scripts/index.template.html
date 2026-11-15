@@ -49,6 +49,7 @@
     .challenge-button { flex: 0 0 auto; padding: 0 12px; color: #17203a; border: 0; background: linear-gradient(100deg, #a5f3d2, #92d9ff); }
     .challenge-feedback { min-height: 0; margin: -5px 3px 9px; color: #a8d9ff; font-size: 10px; line-height: 1.35; text-align: center; }
     .challenge-feedback:empty { display: none; }
+    #challengeCard[hidden], #challengeFeedback[hidden] { display: none; }
     .hud { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
     .stat { min-height: 58px; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 14px; border: 1px solid var(--line); border-radius: 16px; background: var(--panel); box-shadow: 0 10px 28px rgba(0,0,0,.12); }
     .stat-label { display: block; color: var(--muted); font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
@@ -75,6 +76,10 @@
     .actions { display: grid; grid-template-columns: 1fr; gap: 9px; margin-top: 11px; }
     .restart { min-height: 47px; color: #17203a; border: 0; background: linear-gradient(100deg, #a5f3d2, #92d9ff); box-shadow: 0 8px 25px rgba(103,214,206,.15); }
     .restart:hover:not(:disabled) { background: linear-gradient(100deg, #b6f9dd, #a5e3ff); }
+    .campaign { min-height: 47px; color: #edf2ff; border-color: rgba(176,194,245,.28); background: linear-gradient(100deg, #354477, #4b3e80); }
+    .campaign:hover:not(:disabled) { background: linear-gradient(100deg, #40558f, #5b4b99); }
+    .fenix-launch { min-height: 47px; color: #241507; border: 0; background: linear-gradient(100deg, #ffd066, #ff995e); box-shadow: 0 8px 25px rgba(255,153,94,.17); }
+    .fenix-launch:hover:not(:disabled) { background: linear-gradient(100deg, #ffdb84, #ffad7e); }
     .score-share { min-height: 47px; }
     .tiktok-end { display: flex; align-items: center; justify-content: center; min-height: 43px; margin-top: 9px; padding: 0 14px; border: 1px solid rgba(176,194,245,.2); border-radius: 13px; color: #cbd7f5; background: rgba(40,56,98,.58); font-size: 12px; font-weight: 700; text-align: center; text-decoration: none; }
     .tiktok-end:hover { border-color: rgba(190,208,255,.35); background: rgba(53,74,126,.66); }
@@ -100,7 +105,7 @@
       <p class="intro">Um jogo de Ivan Moreira de Araujo</p>
     </header>
 
-    <section class="challenge-card" aria-label="Desafio compartilhável">
+    <section class="challenge-card" id="challengeCard" aria-label="Desafio compartilhável">
       <div class="challenge-copy">
         <span class="challenge-label" id="challengeLabel">PARTIDA LIVRE</span>
         <p class="challenge-description" id="challengeDescription">Crie um link para todo mundo jogar a mesma fase.</p>
@@ -117,7 +122,7 @@
     <section class="game-panel" aria-label="Área do jogo">
       <div class="status-line" aria-live="polite"><span class="status-dot" aria-hidden="true"></span><span id="statusText">Mire e toque no tabuleiro para disparar</span></div>
       <div class="canvas-wrap">
-        <canvas id="gameCanvas" aria-label="Tabuleiro de bolhas. Mova o ponteiro para mirar e clique ou toque para disparar."></canvas>
+        <canvas id="gameCanvas" tabindex="0" aria-label="Tabuleiro de bolhas. Clique ou toque para disparar. No teclado, setas para mirar, Espaço para disparar e X para trocar."></canvas>
       </div>
       <div class="ammo-bar" aria-label="Bolhas disponíveis">
         <div class="ammo"><span class="swatch" id="currentSwatch" aria-hidden="true"></span><span class="ammo-copy"><span class="ammo-label">Bolha atual</span><span class="ammo-name" id="currentName">—</span></span></div>
@@ -128,10 +133,13 @@
 
     <div class="actions">
       <button class="restart" id="restartButton" type="button">Jogar de novo</button>
+      <button class="campaign" id="campaignButton" type="button">Jogar campanha • 10 fases</button>
+      <button class="restart" id="nextCampaignButton" type="button" hidden>Próxima fase</button>
+      <button class="fenix-launch" id="fenixButton" type="button" hidden>Ir ao Fênix Blast agora</button>
       <button class="score-share" id="scoreShareButton" type="button" hidden>Compartilhar placar</button>
       <a class="tiktok-end" id="tiktokEndLink" href="https://tiktok.com/@achadosanosdourados" target="_blank" rel="noopener noreferrer" hidden>Seguir no TikTok @achadosanosdourados</a>
     </div>
-    <p class="help"><strong>Como jogar:</strong> a linha pontilhada mostra a mira. Toque ou clique onde quer lançar. Use <strong>Trocar</strong> para alternar entre a bolha atual e a próxima.</p>
+    <p class="help"><strong>Como jogar:</strong> a linha pontilhada mostra a mira. Toque ou clique onde quer lançar. Use <strong>Trocar</strong> para alternar entre a bolha atual e a próxima.<br><strong>Teclado:</strong> ← → para mirar, Espaço para disparar, X para trocar e Enter para avançar após uma vitória na campanha.<br><strong>Campanha (preview):</strong> 10 fases, sem alterar a partida livre ou o desafio por link. Limpe cada tabuleiro para avançar; depois da fase 10, o Fênix abre em outra página na mesma aba. O preview do Fênix pode pedir login na Vercel.</p>
     <p class="footer">Um jogo de Ivan Moreira de Araujo • Siga no TikTok <a href="https://tiktok.com/@achadosanosdourados" target="_blank" rel="noopener noreferrer">@achadosanosdourados</a></p>
   </main>
   <script>

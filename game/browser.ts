@@ -3,7 +3,16 @@ import { atirar, encaixar, moverTiro, type Tiro } from "./tiro";
 import { resolverEstouro } from "./estouro";
 import { criarGeradorDesafio, lerSementeDesafio } from "./desafio";
 
-type CorBolha = "coral" | "azul" | "menta" | "amarelo" | "violeta";
+import {
+  COLUNAS_CAMPANHA,
+  LINHAS_TABULEIRO,
+  TOTAL_FASES_CAMPANHA,
+  criarTabuleiroCampanha,
+  obterConfiguracaoFaseCampanha,
+  type CorCampanha,
+} from "./campanha";
+
+type CorBolha = CorCampanha;
 
 const CORES: Record<CorBolha, { fill: string; light: string; dark: string; label: string; mark: string }> = {
   coral: { fill: "#ff6478", light: "#ffc1ca", dark: "#b82f4b", label: "coral", mark: "●" },
@@ -13,12 +22,13 @@ const CORES: Record<CorBolha, { fill: string; light: string; dark: string; label
   violeta: { fill: "#b18aff", light: "#e1d1ff", dark: "#6840bb", label: "violeta", mark: "⬟" },
 };
 
-const COLUNAS = 9;
-const LINHAS = 16;
+const COLUNAS = COLUNAS_CAMPANHA;
+const LINHAS = LINHAS_TABULEIRO;
 const TIROS_INICIAIS = 32;
 const VELOCIDADE = 760;
 const MIN_ANGULO = -1.22;
 const MAX_ANGULO = 1.22;
+const URL_PREVIEW_FENIX = "https://fenix-blast-g0x3041f8-fenix-blast.vercel.app/";
 const canvas = document.querySelector<HTMLCanvasElement>("#gameCanvas")!;
 const ctx = canvas.getContext("2d")!;
 const scoreValue = document.querySelector<HTMLElement>("#scoreValue")!;
@@ -36,6 +46,10 @@ const challengeFeedback = document.querySelector<HTMLElement>("#challengeFeedbac
 const challengeButton = document.querySelector<HTMLButtonElement>("#challengeButton")!;
 const scoreShareButton = document.querySelector<HTMLButtonElement>("#scoreShareButton")!;
 const tiktokEndLink = document.querySelector<HTMLAnchorElement>("#tiktokEndLink")!;
+const challengeCard = document.querySelector<HTMLElement>("#challengeCard")!;
+const campaignButton = document.querySelector<HTMLButtonElement>("#campaignButton")!;
+const nextCampaignButton = document.querySelector<HTMLButtonElement>("#nextCampaignButton")!;
+const fenixButton = document.querySelector<HTMLButtonElement>("#fenixButton")!;
 
 const padraoInicial: CorBolha[][] = [
   ["coral", "coral", "coral", "menta", "menta", "menta", "amarelo", "amarelo", "amarelo"],
@@ -86,6 +100,13 @@ let notice = "";
 let noticeUntil = 0;
 let challengeSeed = lerSementeDesafio(new URLSearchParams(window.location.search).get("desafio"));
 let gameRandom: () => number = Math.random;
+let campaignActive = false;
+let campaignLevel = 1;
+let animationFrameId = 0;
+let loopStopped = false;
+let transitionTimer: number | null = null;
+let transitionStarted = false;
+const gameListeners = new AbortController();
 
 function centroDaCelula(coord: HexCoord): { x: number; y: number } {
   return {
@@ -110,6 +131,17 @@ function codigoDesafio(seed: number): string {
 }
 
 function atualizarModoDesafio(): void {
+  if (campaignActive) {
+    challengeCard.hidden = false;
+    challengeFeedback.hidden = true;
+    challengeLabel.textContent = `CAMPANHA • FASE ${campaignLevel}/${TOTAL_FASES_CAMPANHA}`;
+    challengeDescription.textContent = "Limpe o tabuleiro para avançar. Depois da fase 10, você segue para Fênix Blast.";
+    challengeButton.hidden = true;
+    return;
+  }
+  challengeCard.hidden = false;
+  challengeFeedback.hidden = false;
+  challengeButton.hidden = false;
   challengeLabel.textContent = challengeSeed === null ? "PARTIDA LIVRE" : `DESAFIO ${codigoDesafio(challengeSeed)}`;
   challengeDescription.textContent = challengeSeed === null
     ? "Crie um link para todo mundo jogar a mesma fase."
@@ -180,13 +212,68 @@ async function compartilharResultado(): Promise<void> {
   await compartilharOuCopiar("Meu placar no desafio de bolhas", texto, urlDoDesafio(challengeSeed));
 }
 
+function limparTimerTransicao(): void {
+  if (transitionTimer !== null) window.clearTimeout(transitionTimer);
+  transitionTimer = null;
+}
+
+function encerrarJogoAnterior(): void {
+  if (loopStopped) return;
+  loopStopped = true;
+  if (animationFrameId !== 0) window.cancelAnimationFrame(animationFrameId);
+  animationFrameId = 0;
+  limparTimerTransicao();
+  gameListeners.abort();
+  activeShot = null;
+  particles = [];
+  // Bolhas não cria áudio, AudioContext, intervalos ou outros timers de jogo.
+  // Os eventos do template (Analytics/PWA) pertencem à página, não ao motor.
+}
+
+function abrirFenixBlast(): void {
+  if (transitionStarted || !campaignActive || campaignLevel !== TOTAL_FASES_CAMPANHA || gameOver !== "won") return;
+  transitionStarted = true;
+  encerrarJogoAnterior();
+  window.location.assign(URL_PREVIEW_FENIX);
+}
+
+function iniciarCampanha(): void {
+  if (challengeSeed !== null) return;
+  limparTimerTransicao();
+  campaignActive = true;
+  campaignLevel = 1;
+  transitionStarted = false;
+  iniciarPartida();
+}
+
+function sairDaCampanha(): void {
+  limparTimerTransicao();
+  campaignActive = false;
+  campaignLevel = 1;
+  transitionStarted = false;
+  iniciarPartida();
+}
+
+function avancarFaseCampanha(): void {
+  if (!campaignActive || gameOver !== "won" || campaignLevel >= TOTAL_FASES_CAMPANHA) return;
+  campaignLevel += 1;
+  iniciarPartida();
+}
+
 function iniciarPartida(): void {
-  gameRandom = challengeSeed === null ? Math.random : criarGeradorDesafio(challengeSeed);
-  const matrix: Array<Array<CorBolha | null>> = Array.from({ length: LINHAS }, () => Array<CorBolha | null>(COLUNAS).fill(null));
-  padraoInicial.forEach((row, r) => row.forEach((color, c) => { matrix[r][c] = color; }));
+  limparTimerTransicao();
+  transitionStarted = false;
+  gameRandom = campaignActive
+    ? criarGeradorDesafio(campaignLevel * 9973)
+    : challengeSeed === null ? Math.random : criarGeradorDesafio(challengeSeed);
+  const matrix = campaignActive
+    ? criarTabuleiroCampanha(campaignLevel)
+    : Array.from({ length: LINHAS }, () => Array<CorBolha | null>(COLUNAS).fill(null));
+  if (!campaignActive) padraoInicial.forEach((row, r) => row.forEach((color, c) => { matrix[r]![c] = color; }));
   grid = new HexGrid<CorBolha>(matrix);
   score = 0;
-  shotsLeft = TIROS_INICIAIS;
+  shotsLeft = campaignActive ? obterConfiguracaoFaseCampanha(campaignLevel).tiros : TIROS_INICIAIS;
+  pointerInside = false;
   activeShot = null;
   gameOver = null;
   particles = [];
@@ -327,6 +414,9 @@ function encaixarTiro(): void {
       noticeUntil = Number.POSITIVE_INFINITY;
     }
   }
+  if (campaignActive && gameOver === "won" && campaignLevel === TOTAL_FASES_CAMPANHA) {
+    transitionTimer = window.setTimeout(abrirFenixBlast, 6000);
+  }
   atualizarPainel();
 }
 
@@ -378,7 +468,7 @@ function atualizarPainel(): void {
   nextSwatch.setAttribute("aria-label", `Próxima bolha: ${CORES[next].label}`);
   swapButton.disabled = Boolean(activeShot || gameOver);
   statusText.textContent = gameOver === "won"
-    ? "Fase concluída"
+    ? campaignActive ? `Fase ${campaignLevel}/${TOTAL_FASES_CAMPANHA} concluída` : "Fase concluída"
     : gameOver === "lost"
       ? "Fim de jogo"
       : activeShot
@@ -387,8 +477,13 @@ function atualizarPainel(): void {
           ? notice
           : "Mire e toque no tabuleiro para disparar";
   statusText.classList.toggle("is-result", Boolean(gameOver));
-  scoreShareButton.hidden = challengeSeed === null || gameOver === null;
+  scoreShareButton.hidden = campaignActive || challengeSeed === null || gameOver === null;
   tiktokEndLink.hidden = gameOver === null;
+  campaignButton.hidden = challengeSeed !== null && !campaignActive;
+  campaignButton.textContent = campaignActive ? "Sair da campanha" : "Jogar campanha • 10 fases";
+  nextCampaignButton.hidden = !campaignActive || gameOver !== "won" || campaignLevel >= TOTAL_FASES_CAMPANHA;
+  fenixButton.hidden = !campaignActive || gameOver !== "won" || campaignLevel !== TOTAL_FASES_CAMPANHA;
+  restartButton.textContent = campaignActive ? "Reiniciar fase" : "Jogar de novo";
 }
 
 function desenharBolha(x: number, y: number, radius: number, color: CorBolha, mark = true): void {
@@ -590,17 +685,33 @@ function desenharResultado(): void {
   ctx.textAlign = "center";
   ctx.fillStyle = gameOver === "won" ? "#8ff0c9" : "#ff9ba9";
   ctx.font = "800 25px system-ui, sans-serif";
-  ctx.fillText(gameOver === "won" ? "Mandou bem!" : "Fim de jogo", layout.width / 2, y + 44);
+  const resultado = campaignActive
+    ? campaignLevel === TOTAL_FASES_CAMPANHA ? "Campanha concluída!" : `Fase ${campaignLevel} concluída!`
+    : "Mandou bem!";
+  ctx.fillText(gameOver === "won" ? resultado : "Fim de jogo", layout.width / 2, y + 44);
   ctx.fillStyle = "#edf2ff";
   ctx.font = "500 14px system-ui, sans-serif";
-  ctx.fillText(gameOver === "won" ? `Pontuação: ${score.toLocaleString("pt-BR")}` : notice, layout.width / 2, y + 76, boxW - 30);
+  const detalheResultado = campaignActive && campaignLevel === TOTAL_FASES_CAMPANHA
+    ? "Indo para Fênix Blast em instantes…"
+    : campaignActive
+      ? `Fase ${campaignLevel} de ${TOTAL_FASES_CAMPANHA} • ${score.toLocaleString("pt-BR")} pontos`
+      : `Pontuação: ${score.toLocaleString("pt-BR")}`;
+  ctx.fillText(gameOver === "won" ? detalheResultado : notice, layout.width / 2, y + 76, boxW - 30);
   ctx.fillStyle = "#c2d0ff";
   ctx.font = "600 12px system-ui, sans-serif";
-  ctx.fillText("Use “Jogar de novo” para outra partida", layout.width / 2, y + 117);
+  const instrucaoResultado = gameOver === "lost"
+    ? campaignActive ? "Use Reiniciar fase para tentar novamente" : "Use “Jogar de novo” para outra partida"
+    : campaignActive && campaignLevel < TOTAL_FASES_CAMPANHA
+    ? "Toque em Próxima fase para continuar"
+    : campaignActive
+      ? "Toque em Ir ao Fênix Blast para seguir agora"
+      : "Use “Jogar de novo” para outra partida";
+  ctx.fillText(instrucaoResultado, layout.width / 2, y + 117, boxW - 30);
   ctx.restore();
 }
 
 function frame(now: number): void {
+  if (loopStopped) return;
   const delta = Math.min(0.04, Math.max(0, (now - lastFrame) / 1000));
   lastFrame = now;
   if (activeShot) {
@@ -622,31 +733,66 @@ function frame(now: number): void {
     atualizarPainel();
   }
   desenhar();
-  requestAnimationFrame(frame);
+  animationFrameId = window.requestAnimationFrame(frame);
 }
 
+const listenerOptions: AddEventListenerOptions = { signal: gameListeners.signal };
 canvas.addEventListener("pointermove", (event) => {
   const rect = canvas.getBoundingClientRect();
   aimPoint = { x: event.clientX - rect.left, y: event.clientY - rect.top };
   pointerInside = true;
-});
-canvas.addEventListener("pointerleave", () => { pointerInside = false; });
+}, listenerOptions);
+canvas.addEventListener("pointerleave", () => { pointerInside = false; }, listenerOptions);
 canvas.addEventListener("pointerdown", (event) => {
   if (event.button !== 0 && event.pointerType !== "touch") return;
   const rect = canvas.getBoundingClientRect();
   aimPoint = { x: event.clientX - rect.left, y: event.clientY - rect.top };
   pointerInside = true;
   disparar(aimPoint);
+}, listenerOptions);
+swapButton.addEventListener("click", trocarBolhas, listenerOptions);
+restartButton.addEventListener("click", iniciarPartida, listenerOptions);
+challengeButton.addEventListener("click", () => { void compartilharDesafio(); }, listenerOptions);
+scoreShareButton.addEventListener("click", () => { void compartilharResultado(); }, listenerOptions);
+campaignButton.addEventListener("click", () => {
+  if (campaignActive) sairDaCampanha();
+  else iniciarCampanha();
+}, listenerOptions);
+nextCampaignButton.addEventListener("click", avancarFaseCampanha, listenerOptions);
+fenixButton.addEventListener("click", abrirFenixBlast, listenerOptions);
+window.addEventListener("resize", atualizarLayout, listenerOptions);
+window.addEventListener("keydown", (event) => {
+  if (event.altKey || event.ctrlKey || event.metaKey) return;
+  if (event.repeat && !["ArrowLeft", "ArrowRight"].includes(event.code)) return;
+  const target = event.target as HTMLElement | null;
+  if (target?.matches("button, a, input, select, textarea, [contenteditable=true]")) return;
+  if (!layout || !["ArrowLeft", "ArrowRight", "Space", "Enter", "KeyX"].includes(event.code)) return;
+  event.preventDefault();
+  if (event.code === "ArrowLeft" || event.code === "ArrowRight") {
+    const angle = anguloPara(pointerInside ? aimPoint : { x: layout.shooter.x, y: layout.shooter.y - 180 });
+    const newAngle = Math.max(MIN_ANGULO, Math.min(MAX_ANGULO, angle + (event.code === "ArrowLeft" ? -0.06 : 0.06)));
+    aimPoint = { x: layout.shooter.x + Math.sin(newAngle) * 240, y: layout.shooter.y - Math.cos(newAngle) * 240 };
+    pointerInside = true;
+  } else if (event.code === "KeyX") {
+    trocarBolhas();
+  } else if (event.code === "Enter" && campaignActive && gameOver === "won") {
+    if (campaignLevel === TOTAL_FASES_CAMPANHA) abrirFenixBlast();
+    else avancarFaseCampanha();
+  } else {
+    disparar(pointerInside ? aimPoint : { x: layout.shooter.x, y: layout.shooter.y - 180 });
+  }
+}, listenerOptions);
+window.addEventListener("pagehide", encerrarJogoAnterior, listenerOptions);
+// A página encerrada pode voltar pelo BFCache; recarregar evita controles mortos
+// e, principalmente, rearmar automaticamente a transição já consumida.
+window.addEventListener("pageshow", (event) => {
+  if (event.persisted && loopStopped) window.location.reload();
 });
-swapButton.addEventListener("click", trocarBolhas);
-restartButton.addEventListener("click", iniciarPartida);
-challengeButton.addEventListener("click", () => { void compartilharDesafio(); });
-scoreShareButton.addEventListener("click", () => { void compartilharResultado(); });
-window.addEventListener("resize", atualizarLayout);
 
 iniciarPartida();
-requestAnimationFrame(() => {
+animationFrameId = window.requestAnimationFrame(() => {
+  if (loopStopped) return;
   atualizarLayout();
   lastFrame = performance.now();
-  requestAnimationFrame(frame);
+  animationFrameId = window.requestAnimationFrame(frame);
 });
