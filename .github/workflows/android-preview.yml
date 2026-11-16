@@ -1,0 +1,40 @@
+name: Android preview debug
+on:
+  push:
+    branches: ['preview/bolhas-android-20261116']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  android-debug:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+      - name: Install source dependencies
+        run: npm ci
+      - name: Type check and build web
+        run: npm run check && npm run build
+      - name: Generate isolated Android project
+        run: python3 android_preview.py
+      - name: Build debug APK
+        working-directory: android-preview
+        run: gradle --no-daemon :app:assembleDebug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bolhas-em-orbita-android-preview-debug
+          path: android-preview/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
