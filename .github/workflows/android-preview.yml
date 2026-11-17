@@ -4,7 +4,7 @@ on:
     branches: ['preview/bolhas-android-20261116']
   workflow_dispatch:
 permissions:
-  contents: write
+  contents: read
 jobs:
   android-debug:
     runs-on: ubuntu-latest
@@ -41,21 +41,3 @@ jobs:
           path: android-preview/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14
-      - name: Disponibilizar APK somente na branch de teste
-        if: github.ref == 'refs/heads/preview/bolhas-android-20261116'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          python3 - <<'PYCODE'
-          import base64,json,os,urllib.request,urllib.error
-          base='https://api.github.com/repos/'+os.environ['GITHUB_REPOSITORY']+'/contents/bolhas-em-orbita-preview-debug.apk'
-          headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github+json','Content-Type':'application/json','X-GitHub-Api-Version':'2022-11-28'}
-          path='android-preview/app/build/outputs/apk/debug/app-debug.apk'
-          data={'message':'preview: disponibilizar APK de teste', 'branch':'preview/bolhas-android-20261116', 'content':base64.b64encode(open(path,'rb').read()).decode()}
-          try:
-              with urllib.request.urlopen(urllib.request.Request(base+'?ref=preview/bolhas-android-20261116',headers=headers)) as r: data['sha']=json.load(r)['sha']
-          except urllib.error.HTTPError as e:
-              if e.code != 404: raise
-          request=urllib.request.Request(base,headers=headers,data=json.dumps(data).encode(),method='PUT')
-          with urllib.request.urlopen(request) as r: print('APK de teste salvo na branch de preview:',r.status)
-          PYCODE
